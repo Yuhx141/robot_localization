@@ -2376,6 +2376,11 @@ void RosFilter<T>::setPoseCallback(
     return;
   }
 
+  if (!measurement.allFinite() || !measurement_covariance.allFinite()) {
+    RCLCPP_WARN(get_logger(), "Ignoring set_pose request with non-finite pose or covariance.");
+    return;
+  }
+
   // Get rid of any initial poses (pretend we've never had a measurement)
   initial_measurements_.clear();
   previous_measurements_.clear();

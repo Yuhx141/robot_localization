@@ -32,6 +32,7 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -204,7 +205,9 @@ public:
       node_, future, std::chrono::seconds(5)) == rclcpp::FutureReturnCode::SUCCESS;
   }
 
-  bool setPose(rclcpp::Time t, const std::string & frame_id = "odom", double x = 1.0)
+  bool setPose(
+    rclcpp::Time t, const std::string & frame_id = "odom", double x = 1.0,
+    double covariance = 1.0)
   {
     if (!set_pose_->wait_for_service(std::chrono::seconds(5))) {
       return false;
@@ -215,6 +218,7 @@ public:
     setPoseRequest->pose.header.frame_id = frame_id;
     setPoseRequest->pose.pose = getValidPose()->pose;
     setPoseRequest->pose.pose.pose.position.x = x;
+    setPoseRequest->pose.pose.covariance[0] = covariance;
     setPoseRequest->pose.header.stamp = t;
     auto future = set_pose_->async_send_request(setPoseRequest);
     return rclcpp::spin_until_future_complete(
@@ -271,6 +275,17 @@ TEST(FilterBaseDiagnosticsTest, SetPoseTransformFailurePreservesState) {
 
   ASSERT_TRUE(dh_.setPose(dh_.node_->now(), "missing_frame", 5.0));
   size_t output_count = dh_.filtered_odometry.size();
+  ASSERT_TRUE(dh_.waitForOdometryAfter(output_count));
+  EXPECT_NEAR(dh_.filtered_odometry.back().pose.pose.position.x, 2.0, 1e-3);
+
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  ASSERT_TRUE(dh_.setPose(dh_.node_->now(), "odom", nan));
+  output_count = dh_.filtered_odometry.size();
+  ASSERT_TRUE(dh_.waitForOdometryAfter(output_count));
+  EXPECT_NEAR(dh_.filtered_odometry.back().pose.pose.position.x, 2.0, 1e-3);
+
+  ASSERT_TRUE(dh_.setPose(dh_.node_->now(), "odom", 5.0, nan));
+  output_count = dh_.filtered_odometry.size();
   ASSERT_TRUE(dh_.waitForOdometryAfter(output_count));
   EXPECT_NEAR(dh_.filtered_odometry.back().pose.pose.position.x, 2.0, 1e-3);
 
